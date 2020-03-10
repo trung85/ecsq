@@ -180,11 +180,15 @@ func main() {
 			for _, piece := range container.Command {
 				command = append(command, *piece)
 			}
+			m := int64(0)
+			if container.Memory != nil {
+				m = *container.Memory
+			}
 			table.Append([]string{
 				*container.Name,
 				*container.Image,
 				strconv.FormatInt(*container.Cpu, 10),
-				strconv.FormatInt(*container.Memory, 10),
+				strconv.FormatInt(m, 10),
 				strings.Join(command, " "),
 			})
 		}
@@ -461,6 +465,72 @@ Use the "task" command to get details of a task. For example:
 		}
 		return nil
 	})
+
+	containerSecretEnvCommand := app.Command("container-secret-env", "List secrect environment variables for the task's container. Use --format to choose the output format")
+	containerSecretEnvCommand.Arg("cluster", "Name of the cluster").Required().StringVar(&argClusterName)
+	containerSecretEnvCommand.Arg("service", "Name of the service. This can be the full AWS service name, or the short one without the service- prefix and -<cluster> suffix").Required().StringVar(&argServiceName)
+	containerSecretEnvCommand.Flag("container", "Name of the container").StringVar(&flagContainerName)
+	containerSecretEnvCommand.Flag("format", "Format to render the environment variable in. The options are: export, shell, docker, table. Defaults to table").
+		Default("table").EnumVar(&flagFormat, "export", "shell", "docker", "table")
+	containerSecretEnvCommand.Flag("drop", "Case-insensitive comma-separated list of variable names to drop").OverrideDefaultFromEnvar("ECSQ_DROP_ENV_VARS").StringVar(&flagDrop)
+	containerSecretEnvCommand.Action(func(ctx *kingpin.ParseContext) error {
+		task, err := getServiceDetail(svc, argClusterName, argServiceName)
+		app.FatalIfError(err, "Could not describe service")
+		result, err := svc.DescribeTaskDefinition(&ecs.DescribeTaskDefinitionInput{
+			TaskDefinition: task.TaskDefinition,
+		})
+		app.FatalIfError(err, "Could not describe task definition")
+		taskDefinition := result.TaskDefinition
+		var containerDefinition *ecs.ContainerDefinition
+		if flagContainerName == "" && len(taskDefinition.ContainerDefinitions) > 1 {
+			for _, c := range taskDefinition.ContainerDefinitions {
+				fmt.Println("*", *c.Name)
+			}
+			app.Fatalf("Multiple containers found, choose one by name by setting --container")
+		} else if flagContainerName == "" && len(taskDefinition.ContainerDefinitions) == 1 {
+			containerDefinition = taskDefinition.ContainerDefinitions[0]
+		} else {
+			for _, c := range taskDefinition.ContainerDefinitions {
+				if *c.Name == flagContainerName {
+					containerDefinition = c
+					break
+				}
+			}
+		}
+		if containerDefinition == nil {
+			app.Fatalf("Container not found")
+		}
+		SecretsSlice(containerDefinition.Secrets).Sort()
+
+		if flagDrop != "" {
+			filters := map[string]bool{}
+			for _, filter := range strings.Split(flagDrop, ",") {
+				filters[strings.ToLower(strings.TrimSpace(filter))] = true
+			}
+
+			filtered := []*ecs.Secret{}
+			for _, pair := range containerDefinition.Secrets {
+				if _, ok := filters[strings.ToLower(*pair.Name)]; !ok {
+					filtered = append(filtered, pair)
+				}
+			}
+
+			containerDefinition.Secrets = filtered
+		}
+
+		if flagFormat == "table" {
+			table := tablewriter.NewWriter(os.Stdout)
+			table.SetHeader([]string{"Name", "Value"})
+			for _, env := range containerDefinition.Secrets {
+				table.Append([]string{*env.Name, *env.ValueFrom})
+			}
+			table.Render()
+		} else {
+			app.Fatalf("Invalid format %v", flagFormat)
+		}
+		return nil
+	})
+
 	kingpin.MustParse(app.Parse(os.Args[1:]))
 }
 

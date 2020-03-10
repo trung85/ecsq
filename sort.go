@@ -85,3 +85,20 @@ func (s KeyValuePairSlice) Swap(i, j int) {
 func (s KeyValuePairSlice) Sort() {
 	sort.Sort(s)
 }
+
+
+type SecretsSlice []*ecs.Secret
+func (s SecretsSlice) Len() int {
+	return len([]*ecs.Secret(s))
+}
+
+func (s SecretsSlice) Less(i, j int) bool {
+	return *s[i].Name < *s[j].Name
+}
+
+func (s SecretsSlice) Swap(i, j int) {
+	s[j], s[i] = s[i], s[j]
+}
+func (s SecretsSlice) Sort() {
+	sort.Sort(s)
+}
