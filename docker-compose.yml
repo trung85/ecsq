@@ -1,0 +1,89 @@
+version: "3.4"
+
+services:
+
+  proxy:
+    image: traefik:v2.1
+    command:
+      - "--accesslog=false"
+      - "--api.insecure=true"
+      - "--entrypoints.web.address=:80"
+      - "--providers.docker=true"
+      - "--providers.docker.useBindPortIP=true"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+      - "--providers.docker.watch=true"
+      - "--providers.docker.exposedByDefault=true"
+    ports:
+      - 80:80
+      - 8080:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: always
+
+  shell-pocket:
+    container_name: "shell-pocket"
+    environment:
+      SIAB_USER: "pocket"
+      SIAB_PASSWORD: "pocket123"
+      SIAB_SSL: "false"
+      AWS_PROFILE: "pocket-test"
+      SIAB_HOME: "/home/pocket"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.shell-pocket.rule=Host(`shell-pocket.mfv.loc`)"
+      - "traefik.http.routers.shell-pocket.entrypoints=web"
+      - "traefik.port=4200"
+    image: minhtrung/shellinabox
+    privileged: true
+    volumes:
+      - $HOME/.aws:/home/pocket/.aws
+      - $HOME/Projects/mfv-infra/sre-tools/si-project:/home/pocket/sre-tools
+      - $HOME/.ssh:/home/pocket/.ssh
+
+  shell-fpmatching:
+    container_name: "shell-fpmatching"
+    environment:
+      SIAB_USER: "fpmatching"
+      SIAB_PASSWORD: "fpmatching123"
+      SIAB_SSL: "false"
+      AWS_PROFILE: "fpmatching-test"
+      SIAB_HOME: "/home/fpmatching"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.shell-fpmatching.rule=Host(`shell-fpmatching.mfv.loc`)"
+      - "traefik.http.routers.shell-fpmatching.entrypoints=web"
+      - "traefik.port=4200"
+    image: minhtrung/shellinabox
+    privileged: true
+    volumes:
+      - $HOME/.aws:/home/fpmatching/.aws
+      - $HOME/Projects/mfv-infra/sre-tools/si-project:/home/fpmatching/sre-tools
+      - $HOME/.ssh:/home/fpmatching/.ssh
+
+  shell-si:
+    container_name: "shell-si"
+    environment:
+      SIAB_USER: "si"
+      SIAB_PASSWORD: "si123"
+      SIAB_SSL: "false"
+      AWS_PROFILE: "si-test"
+      SIAB_HOME: "/home/si"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.shell-si.rule=Host(`shell-si.mfv.loc`)"
+      - "traefik.http.routers.shell-si.entrypoints=web"
+      - "traefik.port=4200"
+    image: minhtrung/shellinabox
+    privileged: true
+    volumes:
+      - $HOME/.aws:/home/si/.aws
+      - $HOME/Projects/mfv-infra/sre-tools/si-project:/home/si/sre-tools
+      - $HOME/.ssh:/home/si/.ssh
+
+  whoami:
+    image: "containous/whoami"
+    container_name: "simple-service"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`whoami.mfv.loc`)"
+      - "traefik.http.routers.whoami.entrypoints=web"
